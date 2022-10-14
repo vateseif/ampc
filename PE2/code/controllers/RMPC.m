@@ -58,17 +58,46 @@ classdef RMPC < Controller
             %%% Initialize the RMPC Controller
             
             % --- define optimization variables ---
-            z = sdpvar(n, N+1); % Nominal prediction states
-            x_k = sdpvar(n, 1); % Current true state, which is the input to the obj.prob optimizer object
-            v = sdpvar(m, N);   % Nominal prediction inputs
+            z = sdpvar(obj.sys.n, obj.params.N+1); % Nominal prediction states
+            x_k = sdpvar(obj.sys.n, 1); % Current true state, which is the input to the obj.prob optimizer object
+            v = sdpvar(obj.sys.m, obj.params.N);   % Nominal prediction inputs
             
             %%% TODO %%%
             % Compute the required tightenings given rho
             % You have to define obj.K!
             % Define the robust MPC problem constraints and objective.
             
-            % --- start inserting here ---            
+            % --- start inserting here --- 
             
+            % compute tightenings
+            [x_tight, u_tight, P, K, delta] = obj.compute_tightening(rho);
+            obj.K = K;
+            X_tight = Polyhedron(sys.X.A, sys.X.b - x_tight);
+            U_tight = Polyhedron(sys.U.A, sys.U.b - u_tight);
+
+            % objective
+            objective = 0;
+            for i=1:obj.params.N
+                objective = objective + z(:,i)'*obj.params.Q*z(:,i) + v(:,i)'*obj.params.R*v(:,i);
+            end
+            % dynamics
+            constraints = [];
+            for i = 1:obj.params.N
+                constraints = [constraints, z(:,i+1)==obj.sys.A*z(:,i)+obj.sys.B*v(:,i)];
+            end
+            % state tightening constraints
+            for i=1:obj.params.N+1
+                constraints = [constraints, ismember(z(:,i), X_tight)];
+                %constraints = [constraints, sys.X.A*z(:,i)<=sys.X.b - x_tight];
+            end
+            constraints = [constraints, z(:,end) == [0; 0]];
+            % input tightening constraints
+            for i = 1:obj.params.N
+                constraints = [constraints, ismember(v(:,i), U_tight)];
+                %constraints = [constraints, sys.U.A*v(:,i)<=sys.U.b - u_tight];
+            end
+            % initial state constraint
+            constraints = [constraints, (x_k-z(:,1))'*P*(x_k-z(:,1)) <= delta^2];
 
             % --- stop inserting here ---
             %%%
@@ -110,13 +139,57 @@ classdef RMPC < Controller
             % compute with the provided constraints in 1a) and which 
             % results in a recursively feasible RMPC scheme, as well as 
             % feasible for the provided initial condition will be accepted.
-            % --- start inserting here ---            
+            % --- start inserting here ---
+            
+            % params
+            n = obj.sys.n;
+            m = obj.sys.m;
+            nx = length(obj.sys.params.b_x);
+            nu = length(obj.sys.params.b_u);
+            A = obj.sys.params.A;
+            B = obj.sys.params.B;
+            Ax = obj.sys.params.A_x;
+            Au = obj.sys.params.A_u;
+            v_w = obj.sys.params.A_w \ obj.sys.params.b_w; %% TODO: is this right?
+            % init decision variables 
+            Y = sdpvar(m, n, 'full');
+            E = sdpvar(n, n);
+            c_x_2 = sdpvar(nx,1); % vector of values c_{x,j}^2
+            c_u_2 = sdpvar(nu,1); % vector of values c_{u,j}^2
+            w_b_2 = sdpvar(1);  % w_bar^2
+            % objective 
+            cost = 0.5*(1-rho) * ((nx + nu) * w_b_2 + 50 * sum(c_x_2) + sum(c_u_2));
+            % constraints
+            epsilon = 1e-5; % tolerance for converting > to >=
+            con = E >= eye(n);
+            con = [con, [rho^2*E, (A*E+B*Y)'; (A*E+B*Y), E] >= eye(2*n) * epsilon];
+            for j=1:nx
+                con = [con, [c_x_2(j), Ax(j,:)*E; E'*Ax(j,:)', E] >= eye(n+1) * epsilon];
+            end
+            for j=1:nu
+                con = [con, [c_u_2(j), Au(j,:)*Y; Y'*Au(j,:)', E] >= eye(n+1) * epsilon];
+            end
+            con = [con, [w_b_2, v_w'; v_w, E] >= eye(n+1)*epsilon];
+
             
             options = sdpsettings('solver','sedumi', 'verbose', 0);
             % Only uncomment if you have Mosek installed, it will result in
             % a nice speedup
             %options = sdpsettings('solver','mosek', 'verbose', 0);
             
+            % run optimizer
+            optimize(con, cost, options);
+            % retrieve solutions
+            P = inv(value(E));
+            K = value(Y) / value(E);
+            c_x = sqrt(value(c_x_2));
+            c_u = sqrt(value(c_u_2));
+            w_b = sqrt(value(w_b_2));
+            x_tight = c_x * w_b / (1 - rho);
+            u_tight = c_u * w_b / (1 - rho);
+            delta = w_b / (1-rho);
+
+
             % --- stop inserting here ---
             %%%
             
