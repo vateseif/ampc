@@ -33,7 +33,7 @@ ctrl = RMPC(sys, params.ctrl);
 %     value for rho making sure the resulting RPI set is contained in the
 %     state constraints
 
-rho = 0.95; % TODO: Try different values for rho and fix it for the remainder of the exercise
+rho = 0.985; % TODO: Try different values for rho and fix it for the remainder of the exercise
 [x_tight, u_tight, P, K, delta] = ctrl.compute_tightening(rho);
 X_tight = Polyhedron(sys.X.A, sys.X.b - x_tight);
 U_tight = Polyhedron(sys.U.A, sys.U.b - u_tight);

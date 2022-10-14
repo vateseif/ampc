@@ -160,7 +160,7 @@ classdef RMPC < Controller
             % objective 
             cost = 0.5*(1-rho) * ((nx + nu) * w_b_2 + 50 * sum(c_x_2) + sum(c_u_2));
             % constraints
-            epsilon = 1e-5; % tolerance for converting > to >=
+            epsilon = 0; % tolerance for converting > to >=
             con = E >= eye(n);
             con = [con, [rho^2*E, (A*E+B*Y)'; (A*E+B*Y), E] >= eye(2*n) * epsilon];
             for j=1:nx
