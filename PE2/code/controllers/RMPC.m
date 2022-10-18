@@ -158,7 +158,7 @@ classdef RMPC < Controller
             c_u_2 = sdpvar(nu,1); % vector of values c_{u,j}^2
             w_b_2 = sdpvar(1);  % w_bar^2
             % objective 
-            cost = 0.5*(1-rho) * ((nx + nu) * w_b_2 + 50 * sum(c_x_2) + sum(c_u_2));
+            cost = 0.5/(1-rho) * ((nx + nu) * w_b_2 + 50 * sum(c_x_2) + sum(c_u_2));
             % constraints
             epsilon = 0; % tolerance for converting > to >=
             con = E >= eye(n);
