@@ -150,7 +150,7 @@ classdef RMPC < Controller
             B = obj.sys.params.B;
             Ax = obj.sys.params.A_x;
             Au = obj.sys.params.A_u;
-            v_w = obj.sys.params.A_w \ obj.sys.params.b_w; %% TODO: is this right?
+            v_w = obj.sys.W.V';%Polyhedron(obj.sys.params.A_w,obj.sys.params.b_w).V';
             % init decision variables 
             Y = sdpvar(m, n, 'full');
             E = sdpvar(n, n);
@@ -169,7 +169,9 @@ classdef RMPC < Controller
             for j=1:nu
                 con = [con, [c_u_2(j), Au(j,:)*Y; Y'*Au(j,:)', E] >= eye(n+1) * epsilon];
             end
-            con = [con, [w_b_2, v_w'; v_w, E] >= eye(n+1)*epsilon];
+            for j=1:size(obj.sys.params.A_w)
+                con = [con, [w_b_2, v_w(:,j)'; v_w(:,j), E] >= eye(n+1)*epsilon];
+            end
 
             
             options = sdpsettings('solver','sedumi', 'verbose', 0);
