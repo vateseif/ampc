@@ -71,7 +71,6 @@ if params.plot.show
     plot_x('state-state', figIdx(3), x, sys.X, params.plot);
     plot_u(figIdx(4), u, sys.U, params.plot);
 end
-
 %% Exercise 2a/2b
 % 2a) Implement the state dependet disturbance avoidance constraint in
 %     Nonlinear_RMPC.m. Also see instructions in that file.
@@ -79,7 +78,7 @@ end
 %     the system. Observe what happens when you change rho and w_hat.
 %     Note: Too small values of w_hat will lead to feasibility issues. The
 %           same holds for too small and too large values of rho.
-w_hat = 0; % TODO: set w_hat here
+w_hat = w_bar/2; % TODO: set w_hat here
 delta = w_hat/(1-rho);
 X_tight = Polyhedron(sys.X.A, sys.X.b - c_x*delta);
 U_tight = Polyhedron(sys.U.A, sys.U.b - c_u*delta);

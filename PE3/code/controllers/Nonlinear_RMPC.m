@@ -81,6 +81,10 @@ classdef Nonlinear_RMPC < Controller
                 %%% TODO %%%
                 % compute L_w and recompute delta according to manually set
                 % w_bar in this if clause.
+                
+                P_sqrt = chol(P); % choleski decomposition for sqrt of matrix
+                L_w = norm(P_sqrt * (obj.params.G / inv(P_sqrt)), 2); % matrix 2 norm
+                delta = w_bar/(1-rho);
             end
                         
             % --- initialize Opti stack ---
@@ -122,6 +126,12 @@ classdef Nonlinear_RMPC < Controller
             % initial state tube constraint
             obj.prob.subject_to((obj.x_0 - obj.x(:, 1))' * P * (obj.x_0 - obj.x(:, 1)) <= delta^2);
             
+            % state dependent constraint disturbance
+            if ~isempty(w_bar)
+                for i = 1:obj.params.N
+                    obj.prob.subject_to((obj.params.G*obj.x(:,i))' * P * obj.params.G*obj.x(:,i) <= (w_bar-L_w*delta)^2);
+                end
+            end
 
             obj.prob.minimize(cost);
             % --- stop inserting here ---
