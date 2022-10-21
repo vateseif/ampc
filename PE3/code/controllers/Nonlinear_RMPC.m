@@ -103,7 +103,27 @@ classdef Nonlinear_RMPC < Controller
             
             % --- start inserting here --- 
             
+            % cost
+            cost = 0;
+            for i = 1:obj.params.N
+                cost = cost + obj.x(:, i)' * obj.params.Q * obj.x(:, i) + obj.u(i)^2 * obj.params.R;
+            end
+            % sys dynamics
+            for i=1:obj.params.N
+                obj.prob.subject_to(obj.x(:,i+1) == sys.f(obj.x(:,i), obj.u(i)));
+            end
+            % state & input constraints
+            for i = 1:obj.params.N
+                obj.prob.subject_to(sys.params.A_x * obj.x(:,i) <= sys.params.b_x - c_x*delta);
+                obj.prob.subject_to(sys.params.A_u * obj.u(:,i) <= sys.params.b_u - c_u*delta);
+            end
+            % terminal state set 
+            obj.prob.subject_to(obj.x(:,end) == [0; 0]);
+            % initial state tube constraint
+            obj.prob.subject_to((obj.x_0 - obj.x(:, 1))' * P * (obj.x_0 - obj.x(:, 1)) <= delta^2);
             
+
+            obj.prob.minimize(cost);
             % --- stop inserting here ---
             %%%
             
@@ -145,14 +165,49 @@ classdef Nonlinear_RMPC < Controller
             % compute with the provided constraints in 1a) and which 
             % results in a recursively feasible RMPC scheme, as well as 
             % feasible for the provided initial condition will be accepted.
-            % --- start inserting here ---     
+            % --- start inserting here ---
+
+            % params
+            n = obj.sys.n;
+            m = obj.sys.m;
+            nx = length(obj.sys.params.b_x);
+            nu = length(obj.sys.params.b_u);
+            Ax = obj.sys.params.A_x;
+            Au = obj.sys.params.A_u;
+
+            % init decision variables 
+            Y = sdpvar(m, n, 'full');
+            E = sdpvar(n, n);
+            c_x_2 = sdpvar(nx,1); % vector of values c_{x,j}^2
+            c_u_2 = sdpvar(nu,1); % vector of values c_{u,j}^2
+            w_b_2 = sdpvar(1);  % w_bar^2
 
             % use the following definition as the vertices of the
             % disturbance set.
             W_V = obj.params.G*obj.sys.X.V';
+            n_w = length(W_V);
             
-            constraints = ;
-            objective = ;
+            % objective function
+            objective = 0.5/(1-rho) * ((nx + nu) * w_b_2 + 50 * sum(c_x_2) + sum(c_u_2));
+            
+            % constraints
+            % constraints
+            epsilon = 0; % tolerance for converting > to >=
+            con = E >= eye(n);
+            con = [con, [rho^2*E, (A_1*E+B*Y)'; (A_1*E+B*Y), E] >= eye(2*n) * epsilon];
+            con = [con, [rho^2*E, (A_2*E+B*Y)'; (A_2*E+B*Y), E] >= eye(2*n) * epsilon];
+            for j=1:nx
+                con = [con, [c_x_2(j), Ax(j,:)*E; E'*Ax(j,:)', E] >= eye(n+1) * epsilon];
+            end
+            for j=1:nu
+                con = [con, [c_u_2(j), Au(j,:)*Y; Y'*Au(j,:)', E] >= eye(n+1) * epsilon];
+            end
+            for j=1:n_w
+                con = [con, [w_b_2, W_V(:,j)'; W_V(:,j), E] >= eye(n+1)*epsilon];
+            end
+            
+            constraints = con;
+            
             
             % solve problem
             options = sdpsettings('solver','sedumi', 'verbose', 0);
@@ -165,19 +220,19 @@ classdef Nonlinear_RMPC < Controller
             
             % --- define function outputs ---
             % recover Lyapunov function & controller
-            P = ;
-            K = ;
+            P = inv(value(E));
+            K = value(Y) / value(E);
             
             %--- compute tightening ---
             % compute w_bar & delta
-            w_bar = ;
-            delta = ;
+            w_bar = sqrt(value(w_b_2));
+            delta = w_bar / (1-rho);
             
             % compute tightening of state constraints
-            c_x = ;
+            c_x = sqrt(value(c_x_2));
             
             % compute tightening of input constraints
-            c_u = ;
+            c_u = sqrt(value(c_u_2));
             
             % --- stop inserting here --- 
         end

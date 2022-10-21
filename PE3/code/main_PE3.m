@@ -27,7 +27,7 @@ ctrl = Nonlinear_RMPC(sys, params.ctrl, params.diff_sys);
 % 1b) Try various values for rho and observe the produced plots. Choose a
 %     value for rho making sure the resulting RPI set is contained in the
 %     state constraints
-rho = ; % TODO: set rho here
+rho = 0.8; % TODO: set rho here
 [c_x, c_u, P, K, delta, w_bar] = ctrl.compute_tightening(rho);
 X_tight = Polyhedron(sys.X.A, sys.X.b - c_x*delta);
 U_tight = Polyhedron(sys.U.A, sys.U.b - c_u*delta);
@@ -79,7 +79,7 @@ end
 %     the system. Observe what happens when you change rho and w_hat.
 %     Note: Too small values of w_hat will lead to feasibility issues. The
 %           same holds for too small and too large values of rho.
-w_hat = ; % TODO: set w_hat here
+w_hat = 0; % TODO: set w_hat here
 delta = w_hat/(1-rho);
 X_tight = Polyhedron(sys.X.A, sys.X.b - c_x*delta);
 U_tight = Polyhedron(sys.U.A, sys.U.b - c_u*delta);
