@@ -83,7 +83,7 @@ classdef Nonlinear_RMPC < Controller
                 % w_bar in this if clause.
                 
                 P_sqrt = chol(P); % choleski decomposition for sqrt of matrix
-                L_w = norm(P_sqrt * (obj.params.G / inv(P_sqrt)), 2); % matrix 2 norm
+                L_w = norm(P_sqrt * (obj.params.G / P_sqrt), 2); % matrix 2 norm (spectral norm)
                 delta = w_bar/(1-rho);
             end
                         
