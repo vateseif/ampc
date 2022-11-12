@@ -47,16 +47,38 @@ classdef PRS_SMPC < Controller
             %%% Start inserting code here %%%%%%%%%%%%%%%%%%%%%%%%%%
             
             %%% --- Initialize MPC Controller ---
+            n = sys.n;
+            m = sys.m;
+            N = obj.params.N;
+
             % define optimization variables
-            x_bar = [];
-            x_bar_0 =[]; % This is the initial condition which will be provided as an input to the optimizer
-            u_bar = [];
-            xtight = sdpvar(size(obj.sys.X.A,1), obj.params.N); % These are the state tightenings which will be provided as an input to the optimizer, i.e. in the halfspace formulation: A_x*x <= b_x - xtight
-            utight = sdpvar(size(obj.sys.U.A,1), obj.params.N); % These are the input tightenings which will be provided as an input to the optimizer, i.e. in the halfspace formulation: A_u*u <= b_u - utight
+            x_bar = sdpvar(n, N);
+            x_bar_0 = sdpvar(n, 1); % This is the initial condition which will be provided as an input to the optimizer
+            u_bar = sdpvar(m, N);
+            xtight = sdpvar(size(obj.sys.X.A,1), N); % These are the state tightenings which will be provided as an input to the optimizer, i.e. in the halfspace formulation: A_x*x <= b_x - xtight
+            utight = sdpvar(size(obj.sys.U.A,1), N); % These are the input tightenings which will be provided as an input to the optimizer, i.e. in the halfspace formulation: A_u*u <= b_u - utight
             
+            constraints = [x_bar(:,1) == obj.sys.A*x_bar_0 + obj.sys.B*u_bar(:,1)];
+            % dynamics
+            for i=1:N-1
+                constraints = [constraints, x_bar(:,i+1) == obj.sys.A*x_bar(:,i) + obj.sys.B*u_bar(:,i+1)];
+            end
+            % chance constraint tightening
+            for i=1:N
+                constraints = [constraints, obj.sys.X.A*x_bar(:,i) <= obj.sys.X.b - xtight(:,i)];
+                constraints = [constraints, obj.sys.U.A*u_bar(:,i) <= obj.sys.U.b - utight(:,i)];
+            end
+
+            %objective
             objective = 0;
-            constraints = [];
+            for i=1:N-1
+                objective = objective + x_bar(:, i)' * params.Q * x_bar(:, i);
+                objective = objective + u_bar(:, i)' * params.R * u_bar(:, i);
+            end
+            objective = objective + x_bar(:,N)' * params.Q * x_bar(:, N);
+
             
+
             %%% Stop inserting code %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             
             % setup Yalmip solver object
@@ -94,7 +116,7 @@ classdef PRS_SMPC < Controller
             end
             %%%
             
-            % look up system parameters
+            %look up system parameters
             n = obj.sys.n; %state dimension
             m = obj.sys.m; %input dimension
             noiseCovariance = obj.sys.params.noiseCovariance; % noise covariance
@@ -112,9 +134,12 @@ classdef PRS_SMPC < Controller
             %You can use trace(.) as a volume upper bound.
             
             %%% Start inserting code here %%%%%%%%%%%%%%%%%%%%%%%%%%
-        
-            objective = 0;
+            epsilon = 1e-5; % tolerance for converting > to >=
+
+            objective = trace(E);
             constraints = [];
+            constraints = [constraints, E-noiseCovariance >= eye(n)*epsilon];
+            constraints = [constraints, [E-noiseCovariance, A*E+B*Y; E*A'+Y'*B', E]>=zeros(2*n, 2*n)];
             
             %%% Stop inserting code %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             
@@ -138,7 +163,7 @@ classdef PRS_SMPC < Controller
             for i = 1:N
                % Use the closed-loop dynamics to propagate the error
                % variance as seen in the recitation.
-               var_e{i+1} = []; 
+               var_e{i+1} = A_K * var_e{i} * A_K' + noiseCovariance; 
             end
 
             %%% Stop inserting code %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

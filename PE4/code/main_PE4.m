@@ -23,7 +23,7 @@ ctrl_RI = PRS_SMPC(sys, params.ctrl);
 %% Exercise 1a)
 % Implement compute_PRS_min in the PRS_SMPC class, where we 
 % optimise over the shape of the PRS and the tube controller.
-p = 0; %TODO: Change p and observe the different tightenings
+p = 0.9; %TODO: Change p and observe the different tightenings
 
 [xtight, utight, F, p_tilde, K] = ctrl_RI.compute_PRS_min(p, params.sim.nrSteps+ctrl_RI.params.N);
 
@@ -83,19 +83,19 @@ for j=1:nrTraj
             % in the optimization, which corresponds to
             % xtight(:,k:k+ctrl_RI.params.N-1). You do not need to change
             % these.
-            [u_bar, x_bar_1, errmsg] = ctrl_RI.solve([], {xtight(:,k:k+ctrl_RI.params.N-1), utight(:,k:k+ctrl_RI.params.N-1)}, 0);
+            [u_bar, x_bar_1, errmsg] = ctrl_RI.solve(x(k,:,j)', {xtight(:,k:k+ctrl_RI.params.N-1), utight(:,k:k+ctrl_RI.params.N-1)}, 0);
             
             % Check if the optimization problem was infeasible using errmsg.
             % If so, apply the computed input to the system. Otherwise,
             % recompute the optimization problem with x_bar_0=x_bar_1|k-1. 
                  
-            if [] % if infeasible or any other issues
+            if errmsg ~= 0% if infeasible or any other issues
                 % Similar to before, change the first input to
                 % ctrl_RI.solve such that x_bar_0=x_bar_1|k-1.
                 % Hint: The previous x_bar_1 are saved in the variable
                 % x_bar. Check within this control loop how to correctly
                 % access it.
-                [u_bar, x_bar_1, errmsg_nom] = ctrl_RI.solve([], {xtight(:,k:k+ctrl_RI.params.N-1), utight(:,k:k+ctrl_RI.params.N-1)}, 0);
+                [u_bar, x_bar_1, errmsg_nom] = ctrl_RI.solve(x_bar(k,:,j)', {xtight(:,k:k+ctrl_RI.params.N-1), utight(:,k:k+ctrl_RI.params.N-1)}, 0);
  
                 % If this is still infeasible, something is wrong.
                 if errmsg_nom
@@ -103,11 +103,11 @@ for j=1:nrTraj
                 end
                 % Apply the corresponding control law. Make sure you apply
                 % the correct feedback!
-                u(k,j) = [];
+                u(k,j) = u_bar;
             else
                 % If the problem given the true state was feasible, apply 
                 % the corresponding input
-                u(k,j) = [];
+                u(k,j) = u_bar;
             end
             
         % --- stop inserting here ---
