@@ -69,13 +69,13 @@ classdef PRS_SMPC < Controller
                 constraints = [constraints, obj.sys.U.A*u_bar(:,i) <= obj.sys.U.b - utight(:,i)];
             end
 
-            %objective
-            objective = 0;
-            for i=1:N-1
+            %objective (NOTE: using Q instead of P for terminal cost ||x_N||)
+            objective = x_bar_0' * params.Q * x_bar_0;
+            for i=1:N
                 objective = objective + x_bar(:, i)' * params.Q * x_bar(:, i);
                 objective = objective + u_bar(:, i)' * params.R * u_bar(:, i);
             end
-            objective = objective + x_bar(:,N)' * params.Q * x_bar(:, N);
+            % objective = objective + x_bar(:,N)' * params.Q * x_bar(:, N);
 
             
 

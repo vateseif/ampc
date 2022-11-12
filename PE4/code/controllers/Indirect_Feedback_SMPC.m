@@ -54,19 +54,58 @@ classdef Indirect_Feedback_SMPC < Controller
             %%% TODO: Implement the indirect feedback SMPC%%%
             %%% Start inserting code here %%%%%%%%%%%%%%%%%%%%%%%%%%
             %%% --- Initialize MPC Controller ---
+            % params
+            n = sys.n;
+            m = sys.m;
+            N = obj.params.N;
             % define optimization variables
-            x_bar = [];
-            z = [];
-            e_bar = [];
-            x_k = []; % true state x(k); input to the optimizer
-            z_1 = []; % last predicted nominal state z_1|k-1; input to the optimizer
-            v = [];
-            u_bar = [];
-            xtight = sdpvar(size(X.A,1), obj.params.N); % These are the state tightenings which will be provided as an input to the optimizer, i.e. in the halfspace formulation: A_x*x <= b_x - xtight
-            utight = sdpvar(size(U.A,1), obj.params.N); % These are the input tightenings which will be provided as an input to the optimizer, i.e. in the halfspace formulation: A_u*u <= b_u - utight
+            x_bar = sdpvar(n, N);
+            z = sdpvar(n, N);
+            e_bar = sdpvar(n, N);
+            x_k = sdpvar(n, 1); % true state x(k); input to the optimizer
+            z_1 = sdpvar(n, 1); % last predicted nominal state z_1|k-1; input to the optimizer
+            v = sdpvar(m, N);
+            u_bar = sdpvar(m, N);
+            xtight = sdpvar(size(obj.sys.X.A,1), obj.params.N); % These are the state tightenings which will be provided as an input to the optimizer, i.e. in the halfspace formulation: A_x*x <= b_x - xtight
+            utight = sdpvar(size(obj.sys.U.A,1), obj.params.N); % These are the input tightenings which will be provided as an input to the optimizer, i.e. in the halfspace formulation: A_u*u <= b_u - utight
             
-            objective = 0;
-            constraints = [];
+            % system  dynamics
+            constraints = [x_bar(:,1) == obj.sys.A*x_k + obj.sys.B*u_bar(:,1)];
+            for i=1:N-1
+                constraints = [constraints, x_bar(:,i+1) == obj.sys.A*x_bar(:,i) + obj.sys.B*u_bar(:,i+1)];
+            end
+
+            % nominal dynamics
+            constraints = [constraints, z(:,1) == obj.sys.A*z_1 + obj.sys.B*v(:,1)];
+            for i=1:N-1
+                constraints = [constraints, z(:,i+1) == obj.sys.A*z(:,i) + obj.sys.B*v(:,i+1)];
+            end
+
+            % error
+            for i=1:N
+                constraints = [constraints, e_bar(:,i) == x_bar(:,i) - z(:,i) ];
+            end
+
+            % feedback control law
+            for i=1:N
+                constraints = [constraints, u_bar(:,i) == K*e_bar(:,i) + v(:,i) ];
+            end
+
+            % chance constraint tightening
+            for i=1:N
+                constraints = [constraints, obj.sys.X.A*z(:,i) <= obj.sys.X.b - xtight(:,i)];
+                constraints = [constraints, obj.sys.U.A*v(:,i) <= obj.sys.U.b - utight(:,i)];
+            end
+            
+            % objective
+            objective = x_k' * params.Q * x_k;
+            for i=1:N-1
+                objective = objective + x_bar(:, i)' * params.Q * x_bar(:, i);
+                objective = objective + u_bar(:, i)' * params.R * u_bar(:, i);
+            end
+            objective = objective + u_bar(:,N)' * params.R * u_bar(:,N);
+            objective = objective + x_bar(:,N)' * P * x_bar(:, N);
+            
             
             %%% Stop inserting code %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             
