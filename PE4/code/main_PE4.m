@@ -103,11 +103,11 @@ for j=1:nrTraj
                 end
                 % Apply the corresponding control law. Make sure you apply
                 % the correct feedback!
-                u(k,j) = u_bar;
+                u(k,j) = K * (x_bar(k,:,j)' - x_bar_1{1}) + u_bar;
             else
                 % If the problem given the true state was feasible, apply 
                 % the corresponding input
-                u(k,j) = u_bar;
+                u(k,j) = K * (x_bar(k,:,j)' - x_bar_1{1}) + u_bar;
             end
             
         % --- stop inserting here ---
