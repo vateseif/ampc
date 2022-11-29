@@ -86,10 +86,10 @@ classdef SM < Parameter_Estimator
             % next also implement this method below!
             [A_Omega, b_Omega] = obj.remove_redundant_halfspace(A_Omega, b_Omega);
             
-            Delta = Polyhedron(A_delta, b_delta);
+            Delta = Polyhedron(A_delta, b_delta).minHRep();
             % --------- Stop Modifying Code Here -----------
             
-            obj.Omega = Polyhedron(A_Omega, b_Omega).minHRep;
+            obj.Omega = Polyhedron(A_Omega, b_Omega);
             obj.theta_hat = obj.point_estimate();
         end
         
