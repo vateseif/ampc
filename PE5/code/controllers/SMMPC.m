@@ -62,19 +62,38 @@ classdef SMMPC < Controller
             
             % --------- Start Modifying Code Here -----------
             % use the variables defined below
-            z = 0; %nominal state
-            v = 0; %nominal input
-            x_hat = 0; %performance state
-            u_hat = 0; %performance input
-            x_0 = 0; %initial state
-            hx_tight = 0;  %b vectors of state constraints
-            hu_tight = 0;  %b vectors of input constraints
-            A_theta = 0; %A_hat{\theta}_k Matrix
+            z = sdpvar(n, N+1); %nominal state
+            v = sdpvar(m, N); %nominal input
+            x_hat = sdpvar(n, N+1); %performance state
+            u_hat = sdpvar(m, N); %performance input
+            x_0 = sdpvar(n, 1); %initial state
+            hx_tight = sdpvar(size(obj.sys.X.A,1), N);  %b vectors of state constraints
+            hu_tight = sdpvar(size(obj.sys.U.A,1), N);  %b vectors of input constraints
+            A_theta = sdpvar(n, n); %A_hat{\theta}_k Matrix
             
-            
-            
+            % dynamics
+            constraints = [x_hat(:,1)==x_0, z(:,1)==x_0];
+            for i=1:N
+                % nominal dynamics
+                constraints = [constraints z(:,i+1)==A*z(:,i)+B*v(:,i)];
+                % control input
+                constraints = [constraints u_hat(:,i)==K*(x_hat(:,i) - z(:,i)) + v(:,i)];
+                % dynamics
+                constraints = [constraints x_hat(:,i+1)==A_theta*x_hat(:,i)+B*u_hat(:,i)];
+            end
+            % tightening constraints
+            for i=1:N
+                constraints = [constraints obj.sys.X.A*z(:,i)<=hx_tight(:,i)];
+                constraints = [constraints obj.sys.U.A*v(:,i)<=hu_tight(:,i)];
+            end
+            % terminal constraint (schur complement)
+            constraints = [constraints [1, z(:,N+1)'*P; P*z(:,N+1), P]>=zeros(3)];
+
             objective = 0;
-            constraints = [];
+            for i=1:N
+                objective = objective + x_hat(:,i)'*Q*x_hat(:,i) + u_hat(:,i)'*R*u_hat(:,i);
+            end
+            objective = objective + x_hat(:,N+1)'*P*x_hat(:,N+1);
             
             %%% Terminal constraint
             % the tightened terminal constraint can be directly implemented
@@ -131,10 +150,22 @@ classdef SMMPC < Controller
             % optimization problem!
             
             % --------- Start Modifying Code Here -----------
-            
-            F = {};
-            hx_tight = [];
-            hu_tight = [];
+            % constraint tightening
+            F = {(A+B*K)^0 * W};
+            PX = X-F{1}; PX=PX.minHRep();
+            PU = U-K*F{1}; PU=PU.minHRep();
+            hx_tight = zeros(4, N); hx_tight(:,1)=PX.b;
+            hu_tight = zeros(2, N); hu_tight(:,1)=PU.b;
+            for i=2:N
+                F{i} = F{i-1} + (A+B*K)^i * W;
+                % NOTE: matlab is SHIT and size of PX randomly changes
+                % using minHRep seems to fix the issue
+                PX = X-F{i}; PX=PX.minHRep();
+                PU = U-K*F{i}; PU=PU.minHRep();
+                hx_tight(:,i) = PX.b;
+                hu_tight(:,i) = PU.b;
+            end
+
             
             % --------- Stop Modifying Code Here -----------
         end
